@@ -1,0 +1,6 @@
+<db_config>
+    <dbname>news_explorer</dbname>
+    <user>postgres</user>
+    <host>localhost</host>
+    <password>postgres</password>
+</db_config>
