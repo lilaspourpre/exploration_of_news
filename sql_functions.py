@@ -53,16 +53,29 @@ class sql_functions():
                     third+=value
             self.execution("INSERT INTO", second_part, third)
 
-    def select(self, choice, join):
-        first = "SELECT "+choice+" FROM "+ ptrelations
-        second = "WHERE "+textid+" IN"
-        third = SELECT textid FROM ptrelations WHERE personid=1) AND personid=4"
+    def select(self, choice, condition):
+        first = "SELECT "+choice+" FROM "+ where
+        second = "WHERE "
+        third = condition
         self.execution(first, second, third)
 
     def combine_all(self):
         self.connection_on()
         column_string = ''
         self.con.commit()
-        self.cur.execute("SELECT * FROM Texts")
+
+    def where_search(self, choice, condition):
+        tables = {}
+        self.connection_on()
+        self.cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
+        for row in self.cur.fetchall():
+            tab = []
+            self.cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='"+row[0]+"';")
+            for r in self.cur.fetchall():
+                    tab.append(r[0])
+            tables[row[0]]=tab
+        
+        return tables
+
 
 
