@@ -63,7 +63,7 @@ class sql_functions():
                     choix+=i+" "
         else:
             choix=choice
-        first = "SELECT "+choix+" FROM "+ where
+        first = "SELECT "+choix+" FROM "+
         second = " WHERE "
         third = self.condition_for_select(list(args),kwargs)+" 1=1"
         self.execution(first, second, third)
