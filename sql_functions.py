@@ -53,20 +53,47 @@ class sql_functions():
                     third+=value
             self.execution("INSERT INTO", second_part, third)
 
-    def select(self, choice, condition):
-        first = "SELECT "+choice+" FROM "+ where
-        second = "WHERE "
-        third = condition
+    def select(self, choice, *args, **kwargs):
+        choix = ""
+        if type(choice)==list:
+            for i in choice:
+                if choice.index(i)!=len(choice)-1:
+                    choix+=i+", "
+                else:
+                    choix+=i+" "
+        else:
+            choix=choice
+        first = "SELECT "+choix+" FROM "+ where
+        second = " WHERE "
+        third = self.condition_for_select(list(args),kwargs)+" 1=1"
         self.execution(first, second, third)
 
-    def combine_all(self):
-        self.connection_on()
-        column_string = ''
-        self.con.commit()
+    def condition_for_select(self, *args):
+        condition = ""
+        for arg in args:
+            if type(arg)==list:
+                for a in arg:
+                    condition+=" "+a+" AND"
+            else:
+                for ar in arg:
+                    if type(arg[ar])==str:
+                        condition+=" "+ar+"='"+arg[ar]+"' AND"
+                    elif type(arg[ar])==list:
+                        for i in arg[ar]:
+                            if type(i)==str:
+                                om="'"
+                            else:
+                                om=''
+                            if arg[ar].index(i)!=len(arg[ar])-1:
+                                condition+=" "+ar+"="+om+str(i)+om+" OR"
+                            else:
+                                condition+=" "+ar+"="+om+str(i)+om+" AND"
+                    else:
+                        condition+=" "+ar+"="+str(arg[ar])+" AND"
+        return condition
 
-    def where_search(self, choice, condition):
+    def where_search(self):
         tables = {}
-        self.connection_on()
         self.cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
         for row in self.cur.fetchall():
             tab = []
@@ -74,8 +101,11 @@ class sql_functions():
             for r in self.cur.fetchall():
                     tab.append(r[0])
             tables[row[0]]=tab
-        
         return tables
+
+    def combine_all(self):
+        self.connection_on()
+        self.con.commit()
 
 
 
