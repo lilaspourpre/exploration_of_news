@@ -67,7 +67,7 @@ class SQL_functions():
         first = "SELECT "+choix+" FROM "+self.where(choice,args,kwargs)
         second = " WHERE "
         third = self.condition_for_select(list(args),kwargs)+" 1=1"
-        return first, second, third
+        return first + second + third
 
     def arguments(self, arg):
         list_args = []
@@ -86,28 +86,76 @@ class SQL_functions():
                             list_args.append(arg[:i])
         return list_args
 
-    def where(self, choice, args, kwargs):
-        where = []
+    def where(self, choice, args, kwargs): #таблицы, где мы будем искать заданные памаметры, чтобы узнать, какие таблицы нужны, составим список всех колонок
+        intersections = []
+        choice2 = {}
         for i in kwargs: #добавили из словаря названия переменных
-            choice.append(i)
-        for arg in args:
-            choice.extend(self.arguments(arg))
-        tables = self.where_search()
-        for column in choice:
-            for table in tables:
-                if column in tables[table]:
-                    where.append(table)
-        where = list(set(where))
-        if len(where) == 1:
-            return where[0]
+            choice2[i]=[]
+        for arg in args: #из "специального условия" тоже вытаскиваем колонки
+            choice.extend(self.arguments(arg)) #функция по вытягиванию отденльно
+        tables = self.where_search() #получаем словарь {таблица : колонки}
+        for i in choice:
+            choice2[i]=[]
+        for table in tables:
+            for ch in choice2:
+                if ch in tables[table]:
+                    choice2[ch].append(table)
+        print choice2
+        flag = 0
+        for i in choice2:
+            for j in choice2:
+                if i!=j:
+                    lisst = list(set(choice2[i]).intersection(choice2[j]))
+                    if lisst!=[]:
+                        intersections.extend(lisst)
+                    else:
+                        for a in choice2[i]:
+                            for b in choice2[j]:
+                                if len(set(tables[a]).intersection(tables[b]))!=0:
+                                    intersections.extend([a,b])
+                                else:
+                                    flag+=1
+        f = len(choice2)
+        for se in choice2:
+            f = f * len(choice2[se])
+        if flag == f:
+            for m in choice2:
+                intersections.extend(choice2[m])
+        intersections = list(set(intersections))
+        print intersections
+        if len(intersections) == 1:
+            return intersections[0]
+        what_to_use = self.what_to_join(intersections, tables)
         join_string=''
-        for i in where:
-            if where.index(i)!=len(where)-1:
+        for i in what_to_use:
+            if what_to_use.index(i)!=len(what_to_use)-1:
                 join_string+=i+" NATURAL JOIN "
             else:
                 join_string+=i
         return join_string
-        #подумать, как формировать join
+
+    def what_to_join(self, intersections, tables): #ищем точки соприкосновения
+        probable = []
+        for i in intersections: #для каждой таблицы ищем общие столбцы в другой таблице
+            for j in intersections:
+                if i!=j:
+                    if len(set(tables[i]).intersection(tables[j]))!=0: #если у них есть что-то общее, то мы их вернем
+                        probable.extend([i,j])
+        probable=list(set(probable))
+        if len(probable)==len(intersections):
+            return probable
+        else:
+            for table in tables:
+                if table not in intersections:
+                    length = 0
+                    for s in intersections:
+                        if len(set(tables[table]).intersection(tables[s]))!=0:
+                            length+=1
+                    intersections.append(table)
+                    if length==len(intersections):
+                        return intersections
+                    else:
+                        self.what_to_join(intersections,tables)
 
     def condition_for_select(self, *args):
         condition = ""
@@ -151,4 +199,4 @@ class SQL_functions():
         self.con.commit()
 
 a= SQL_functions()
-print a.select(["clustid", 'persid'],"persid>2 OR persid>2", textid=[2,3], persname='Bob')
+print a.select(["textname"], persname='Bob')
