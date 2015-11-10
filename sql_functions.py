@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import psycopg2
-import sys
 import xml.etree.ElementTree as ET
 class SQL_functions():
     def __init__(self):
@@ -39,22 +38,38 @@ class SQL_functions():
             column_string+=i+" "+dict_columns[i]+" "
         column_string+="PRIMARY KEY ("+prim_key+")"
         self.execution("CREATE TABLE IF NOT EXISTS", table_name, column_string)
+        self.con.commit()
 
     def insert(self, table_name, column_names="", values=[]):
-        if column_names=="":
-            second_part = table_name+" ("+column_names+") "+"VALUES"
+        print self.connection_on()
+        columns = ''
+        if type(column_names)==list:
+            for i in column_names:
+                if column_names.index(i)!=len(column_names)-1:
+                    columns+=i+", "
+                else:
+                    columns+=i
+            second_part = table_name+" ("+columns+") "+"VALUES"
         else:
             second_part = table_name+" "+"VALUES"
-        for group_value in values:
-            third=""
-            for value in group_value:
-                if group_value.index(value)!=len(group_value)-1:
-                    third+=value+", "
+        third=""
+        for value in values:
+            if values.index(value)!=len(values)-1:
+                if type(value)==str:
+                    third+="'"+value+"', "
                 else:
-                    third+=value
-            self.execution("INSERT INTO", second_part, third)
+                    third+=str(value)+", "
+            else:
+                if type(value)==str:
+                    third+="'"+value+"'"
+                else:
+                    third+=str(value)
+        self.execution("INSERT INTO", second_part, third)
+        self.con.commit()
+        return self.connection_off()
 
     def select(self, choice, *args, **kwargs):
+        print self.connection_on()
         choix = ""
         if type(choice)==list:
             for i in choice:
@@ -67,7 +82,10 @@ class SQL_functions():
         first = "SELECT "+choix+" FROM "+self.where(choice,args,kwargs)
         second = " WHERE "
         third = self.condition_for_select(list(args),kwargs)+" 1=1"
-        return first + second + third
+        self.execution(first, second, third)
+        rows = self.cur.fetchall()
+        print self.connection_off()
+        return rows
 
     def arguments(self, arg):
         list_args = []
@@ -100,7 +118,6 @@ class SQL_functions():
             for ch in choice2:
                 if ch in tables[table]:
                     choice2[ch].append(table)
-        print choice2
         flag = 0
         for i in choice2:
             for j in choice2:
@@ -122,7 +139,6 @@ class SQL_functions():
             for m in choice2:
                 intersections.extend(choice2[m])
         intersections = list(set(intersections))
-        print intersections
         if len(intersections) == 1:
             return intersections[0]
         what_to_use = self.what_to_join(intersections, tables)
@@ -155,7 +171,7 @@ class SQL_functions():
                     if length==len(intersections):
                         return intersections
                     else:
-                        self.what_to_join(intersections,tables)
+                        return self.what_to_join(intersections,tables)
 
     def condition_for_select(self, *args):
         condition = ""
@@ -182,7 +198,6 @@ class SQL_functions():
         return condition
 
     def where_search(self):
-        self.connection_on()
         tables = {}
         self.cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';")
         for row in self.cur.fetchall():
@@ -191,12 +206,7 @@ class SQL_functions():
             for r in self.cur.fetchall():
                     tab.append(r[0])
             tables[row[0]]=tab
-        self.connection_off()
         return tables
 
-    def combine_all(self):
-        self.connection_on()
-        self.con.commit()
-
-a= SQL_functions()
-print a.select(["textname"], persname='Bob')
+a = SQL_functions()
+print a.insert('persons',['personid','persname', 'clustid'],[7,'Bobbik','1'])
