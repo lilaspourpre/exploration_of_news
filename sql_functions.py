@@ -18,7 +18,7 @@ class SQL_functions():
         try:
             self.con = psycopg2.connect(self.open_config("config.xml"))
             self.cur = self.con.cursor()
-            return 'success'
+            return 'success on'
         except psycopg2.DatabaseError, e:
             if self.con:
                 self.con.rollback()
@@ -27,7 +27,7 @@ class SQL_functions():
     def connection_off(self):
         if self.con:
             self.con.close()
-        return "success"
+        return "success off"
 
     def execution(self, first, second, third):
         self.cur.execute(first+" "+second+" ("+third+");")
@@ -79,9 +79,24 @@ class SQL_functions():
                     choix+=i+" "
         else:
             choix=choice
-        first = "SELECT "+choix+" FROM "+self.where(choice,args,kwargs)
+        fromm = ''
+        if args:
+            if type(args[0]) == list:
+                for i in args[0]:
+                    if args[0].index(i)!=len(args[0])-1:
+                        fromm+=i+" NATURAL JOIN "
+                    else:
+                        fromm+=i
+                third = self.condition_for_select([x for x in args if args.index(x) > 0],kwargs)+" 1=1"
+            else:
+                fromm = self.where(choice,args,kwargs)
+                third = self.condition_for_select(list(args),kwargs)+" 1=1"
+        else:
+            fromm = self.where(choice,args,kwargs)
+            third = self.condition_for_select(list(args),kwargs)+" 1=1"
+        first = "SELECT "+choix+" FROM "+fromm
         second = " WHERE "
-        third = self.condition_for_select(list(args),kwargs)+" 1=1"
+        print first + second + third
         self.execution(first, second, third)
         rows = self.cur.fetchall()
         print self.connection_off()
@@ -209,4 +224,4 @@ class SQL_functions():
         return tables
 
 a = SQL_functions()
-print a.insert('persons',['personid','persname', 'clustid'],[7,'Bobbik','1'])
+print a.select(["*"], ['persons', 'texts'], persname='Bob')
