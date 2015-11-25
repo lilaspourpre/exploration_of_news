@@ -1,1 +1,0 @@
-CREATE TABLE IF NOT EXISTS clusters (clustid serial PRIMARY KEY, alias char(200));
