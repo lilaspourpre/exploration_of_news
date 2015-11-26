@@ -9,8 +9,8 @@ class SQL_query():
     поддерживает возможность поиска информации и добаления новых данных (insert)
     """
     def __init__(self):
-        self.con = self.connect()
-        self.cur = self.con.cursor()
+        self.con = None
+        self.cur = None
 
     def open_config(self, config): #находит в файле xml код и строит дерево, возвращает строку для коннекта
         tree = ET.parse(config)
@@ -22,7 +22,8 @@ class SQL_query():
 
     def connect(self): #подключение к БД
         try:
-            return psycopg2.connect(self.open_config("config.xml"))
+            self.con = psycopg2.connect(self.open_config("config.xml"))
+            self.cur = self.con.cursor()
         except psycopg2.DatabaseError, e:
             if self.con:
                 self.con.rollback()
@@ -31,21 +32,18 @@ class SQL_query():
         if self.con:
             self.con.close()
 
-    def select_condition(self, columnname, data):
+    def __select_condition(self, columnname, data):
         """
         вспомогательная функция для Texts, Persons, Clusters (поиска по БД)
         :param columnname: название столбца указывается автоматически, пользователю его набирать не нужно
         :param data: указанное значение
         :return: соединяет условие для запроса в вид persid = '1' OR peris = '2'
         """
-        condition = []
-        for i in data:
-            condition.append(columnname + '=' + psycopg2.extensions.adapt(i).getquoted())
-        return ' OR '.join(condition)
+        condition=[columnname + '=' + psycopg2.extensions.adapt(i).getquoted() for i in data]
+        return '('+' OR '.join(condition)+') AND '
 
-    def Texts(self, all=None, persons=None, clustid=None, alias=None):
+    def texts(self, persons=None, clustid=None, alias=None):
         """
-        :param all: при all!=None выдает содержание всей таблицы texts
         :param persons: заданные параметры persons означают, что тексты будут выдаваться относительно персонажей в них
         :param clustid: заданные параметры clustid означают, что тексты будут выдаваться относительно персонажей в них (более общее чем persons)
         :param alias: заданные параметры alias означают, что тексты будут выдаваться относительно персонажей в них
@@ -53,24 +51,28 @@ class SQL_query():
         :return: возвращает номер и название текста (textid, textname)
         """
         if self.con:
-            if all!=None:
-                query = 'SELECT * FROM texts;'
-            if alias!=None:
-                query = 'SELECT textid, textname FROM texts NATURAL JOIN ptrelations NATURAL JOIN persons NATURAL JOIN clusters WHERE ( '+self.select_condition('alias',alias)+' );'
-            elif persons!=None:
-                query = 'SELECT textid, textname FROM texts NATURAL JOIN ptrelations NATURAL JOIN persons WHERE ( '+self.select_condition('persname',persons)+' );'
-            elif clustid!=None:
-                query = 'SELECT textid, textname FROM texts NATURAL JOIN ptrelations NATURAL JOIN persons WHERE ( '+self.select_condition('clustid',clustid)+' );'
-            print query
+            query = 'SELECT textid, textname '
+            if any([alias!=None, persons!=None, clustid!=None]):
+                query += 'FROM texts NATURAL JOIN ptrelations NATURAL JOIN persons '
+                if alias!=None:
+                    query += 'NATURAL JOIN clusters '
+            query += 'WHERE '
+            if alias!= None:
+                query += self.__select_condition('alias', alias)
+            if persons!=None:
+                query += self.__select_condition('persname', persons)
+            if clustid!=None:
+                query += self.__select_condition('clustid', clustid)
+            query+='1=1;'
             self.cur.execute(query)
             return self.cur.fetchall()
         else:
             self.connect()
-            self.Texts(all, persons, clustid, alias)
+            if self.con:
+                self.texts(persons, clustid, alias)
 
-    def Persons(self, all=None, clustid=None, textid=None, alias=None):
+    def persons(self, textid=None, clustid=None, alias=None):
         """
-        :param all: при all!=None выдает содержание всей таблицы persons
         :param clustid: заданные параметры clustid означают, что персонажи будут выдаваться в соответствии с номером кластера
         :param textid: заданные параметры textid означают, что персонажи будут выдаваться в соответствии с номером текста
         :param alias: заданные параметры alias означают, что персонажи будут выдаваться в соответствии с кластером
@@ -78,41 +80,50 @@ class SQL_query():
         :return: возвращает номер и имя персонажа (personid, persname)
         """
         if self.con:
-            if all!=None:
-                query = 'SELECT * FROM persons;'
+            query = 'SELECT personid, persname FROM persons '
             if alias!=None:
-                query = 'SELECT personid, persname FROM persons NATURAL JOIN clusters WHERE ('+self.select_condition('alias',alias)+');'
-            elif textid!=None:
-                query = 'SELECT personid, persname FROM texts NATURAL JOIN ptrelations NATURAL JOIN persons WHERE ('+self.select_condition('textid',textid)+');'
-            elif clustid!=None:
-                query = 'SELECT personid, persname FROM persons WHERE ('+self.select_condition('clustid',clustid)+');'
-            print query
+                query += 'NATURAL JOIN clusters '
+            if textid!=None:
+                query += 'NATURAL JOIN ptrelations NATURAL JOIN texts '
+            query += 'WHERE '
+            if alias!= None:
+                query += self.__select_condition('alias',alias)
+            if textid!=None:
+                query += self.__select_condition('textid',textid)
+            if clustid!=None:
+                query += self.__select_condition('clustid',clustid)
+            query += '1=1;'
             self.cur.execute(query)
             return self.cur.fetchall()
         else:
             self.connect()
-            self.Persons(all, clustid, textid, alias)
+            if self.con:
+                self.persons(clustid, textid, alias)
 
-    def Clusters(self, all=None, textid=None, persons=None):
+    def clusters(self, textid=None, persons=None):
         """
-        :param all: при all!=None выдает содержание всей таблицы clusters
         :param text: заданные параметры textid означают, что кластеры будут выдаваться в соответствии с номером текста
         :param persons: заданные параметры persons означают, что кластеры будут выдаваться относительно персонажей в них
         :return: возвращает номер и имя кластера персонажа
         """
         if self.con:
-            if all!=None:
-                query = 'SELECT * FROM clusters;'
-            elif textid!=None:
-                query = 'SELECT * FROM texts NATURAL JOIN ptrelations NATURAL JOIN persons NATURAL JOIN clusters WHERE ( '+self.select_condition('textid',textid)+' );'
-            elif persons!=None:
-                query = 'SELECT * FROM persons WHERE ('+self.select_condition('persname',persons)+');'
-            print query
+            query = 'SELECT clustid, alias FROM clusters '
+            if any([textid!=None, persons!=None]):
+                query += 'NATURAL JOIN persons '
+                if textid!=None:
+                    query += 'NATURAL JOIN ptrelations NATURAL JOIN texts'
+            query += 'WHERE '
+            if textid!=None:
+                query += self.__select_condition('textid',textid)
+            if persons!=None:
+                query += self.__select_condition('persname',persons)
+            query += '1=1;'
             self.cur.execute(query)
             return self.cur.fetchall()
         else:
             self.connect()
-            self.Clusters(all, textid, persons)
+            if self.con:
+                self.clusters( textid, persons)
 
     def insert(self, table_name, column_names=None, values=[]):
         """
@@ -136,10 +147,13 @@ def data_retrieval():
     """
     dr = SQL_query()
     dr.connect()
-    #dr.Texts(persons=['Bob','Tom']) )
-    #dr.Clusters(text=[2])
-    result = dr.Persons(alias=['Bob'])
-    dr.close()
+    #dr.texts(persons=['Bob','Tom']) )
+    #dr.clusters(text=[2])
+    result = dr.persons()
+    try:
+        dr.close()
+    except psycopg2.DatabaseError, e:
+        pass
     return result
 
 print data_retrieval()
