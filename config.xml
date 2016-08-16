@@ -1,5 +1,5 @@
 <db_config>
-    <dbname>news_explorer</dbname>
+    <dbname>exploration_of_news</dbname>
     <user>postgres</user>
     <host>localhost</host>
     <password>postgres</password>

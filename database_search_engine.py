@@ -39,10 +39,15 @@ class SQL_query():
         :param data: указанное значение
         :return: соединяет условие для запроса в вид persid = '1' OR peris = '2'
         """
-        condition=[columnname + '=' + psycopg2.extensions.adapt(i).getquoted() for i in data]
+        condition = []
+        for i in data:
+            try:
+                condition.append(columnname + '=' + psycopg2.extensions.adapt(i).getquoted())
+            except:
+                condition.append(columnname + '= \''+ i +'\'')
         return '('+' OR '.join(condition)+') AND '
 
-    def texts(self, persons=None, clustid=None, alias=None):
+    def texts(self, persons=None, alias=None, textname=None):
         """
         :param persons: заданные параметры persons означают, что тексты будут выдаваться относительно персонажей в них
         :param clustid: заданные параметры clustid означают, что тексты будут выдаваться относительно персонажей в них (более общее чем persons)
@@ -51,9 +56,9 @@ class SQL_query():
         :return: возвращает номер и название текста (textid, textname)
         """
         if self.con:
-            query = 'SELECT textid, textname '
-            if any([alias!=None, persons!=None, clustid!=None]):
-                query += 'FROM texts NATURAL JOIN ptrelations NATURAL JOIN persons '
+            query = 'SELECT textid, textname FROM texts '
+            if any([alias!=None, persons!=None]):
+                query += 'NATURAL JOIN ptrelations NATURAL JOIN persons '
                 if alias!=None:
                     query += 'NATURAL JOIN clusters '
             query += 'WHERE '
@@ -61,17 +66,35 @@ class SQL_query():
                 query += self.__select_condition('alias', alias)
             if persons!=None:
                 query += self.__select_condition('persname', persons)
-            if clustid!=None:
-                query += self.__select_condition('clustid', clustid)
+            if textname!=None:
+                query += self.__select_condition('textname',textname)
             query+='1=1;'
-            self.cur.execute(query)
-            return self.cur.fetchall()
+            return query
         else:
             self.connect()
             if self.con:
-                self.texts(persons, clustid, alias)
+                self.texts(persons, alias)
 
-    def persons(self, textid=None, clustid=None, alias=None):
+    def ptrelations(self, textid=None, personid=None):
+        """
+        :param textid: заданные параметры textid означают, что отношения будут выдаваться в соответствии с номером текста
+        :param personid: заданные параметры personid означают, что отношения будут выдаваться в соответствии с номером персонажа
+        :return: возвращает номер текста и номера имени персонажа
+        """
+        if self.con:
+            query = 'SELECT * FROM ptrelations WHERE '
+            if textid!=None:
+                query += self.__select_condition('textid', textid)
+            if personid !=None:
+                query += self.__select_condition('personid',personid)
+            query += '1=1;'
+            return query
+        else:
+            self.connect()
+            if self.con:
+                self.ptrelations(textid, personid)
+
+    def persons(self, textname=None, alias=None, personid=None):
         """
         :param clustid: заданные параметры clustid означают, что персонажи будут выдаваться в соответствии с номером кластера
         :param textid: заданные параметры textid означают, что персонажи будут выдаваться в соответствии с номером текста
@@ -80,50 +103,56 @@ class SQL_query():
         :return: возвращает номер и имя персонажа (personid, persname)
         """
         if self.con:
-            query = 'SELECT personid, persname FROM persons '
+            query = 'SELECT personid, persname'
+            if personid!=None:
+                query += ', clustid'
+            query+=' FROM persons '
             if alias!=None:
                 query += 'NATURAL JOIN clusters '
-            if textid!=None:
+            if textname!=None:
                 query += 'NATURAL JOIN ptrelations NATURAL JOIN texts '
             query += 'WHERE '
+            if personid != None:
+                query += self.__select_condition('personid',personid)
             if alias!= None:
                 query += self.__select_condition('alias',alias)
-            if textid!=None:
-                query += self.__select_condition('textid',textid)
-            if clustid!=None:
-                query += self.__select_condition('clustid',clustid)
+            if textname!=None:
+                query += self.__select_condition('textname',textname)
             query += '1=1;'
-            self.cur.execute(query)
-            return self.cur.fetchall()
+            return query
         else:
             self.connect()
             if self.con:
-                self.persons(clustid, textid, alias)
+                self.persons(textname, alias)
 
-    def clusters(self, textid=None, persons=None):
+    def clusters(self, textname=None, persons=None, alias=None):
         """
         :param text: заданные параметры textid означают, что кластеры будут выдаваться в соответствии с номером текста
         :param persons: заданные параметры persons означают, что кластеры будут выдаваться относительно персонажей в них
         :return: возвращает номер и имя кластера персонажа
         """
         if self.con:
-            query = 'SELECT clustid, alias FROM clusters '
-            if any([textid!=None, persons!=None]):
+            if textname!=None:
+                query = 'SELECT clustid, alias, textid FROM clusters '
+            else:
+                query = 'SELECT clustid, alias FROM clusters '
+            if any([textname!=None, persons!=None]):
                 query += 'NATURAL JOIN persons '
-                if textid!=None:
-                    query += 'NATURAL JOIN ptrelations NATURAL JOIN texts'
+                if textname!=None:
+                    query += 'NATURAL JOIN ptrelations NATURAL JOIN texts '
             query += 'WHERE '
-            if textid!=None:
-                query += self.__select_condition('textid',textid)
+            if textname!=None:
+                query += self.__select_condition('textname',textname)
             if persons!=None:
                 query += self.__select_condition('persname',persons)
             query += '1=1;'
-            self.cur.execute(query)
-            return self.cur.fetchall()
+            if alias!=None:
+                query = 'SELECT * FROM clusters WHERE '+self.__select_condition('alias',alias)+'1=1;'
+            return query
         else:
             self.connect()
             if self.con:
-                self.clusters( textid, persons)
+                self.clusters( textname, persons)
 
     def insert(self, table_name, column_names=None, values=[]):
         """
@@ -132,29 +161,40 @@ class SQL_query():
         :param values: и то, что добавить хотим
         :return: просто commit it
         """
+        self.cur.execute("Select * FROM "+table_name)
+        c_name = [desc[0] for desc in self.cur.description][0]
         columns = ''
         if column_names != None: #если указываются, добавляем в раздел со столбцами
                 assert len(column_names) == len(values)
                 columns+='('+', '.join(column_names)+')'
-        self.cur.execute('INSERT INTO '+ table_name+' '+columns+' '+'VALUES ('+', '.join(psycopg2.extensions.adapt(i).getquoted() for i in values)+');')
+        condition = []
+        for i in values:
+            try:
+                condition.append(psycopg2.extensions.adapt(i).getquoted())
+            except:
+                condition.append('\''+ i +'\'')
+        self.cur.execute('INSERT INTO '+ table_name+' '+columns+' '+'VALUES ('+', '.join(condition)+') RETURNING '+c_name+';')
+        id_of_new_row = self.cur.fetchone()[0]
         self.con.commit()
-        return
+        return id_of_new_row
 
-def data_retrieval():
-    """
-    до сих пор точно не понимаю, что ты от меня хочешь здесь, как я буду сразу прописывать на вход несколько запросов
-    :return: result
-    """
-    dr = SQL_query()
-    dr.connect()
-    #dr.texts(persons=['Bob','Tom']) )
-    #dr.clusters(text=[2])
-    result = dr.persons()
-    try:
-        dr.close()
-    except psycopg2.DatabaseError, e:
-        pass
-    return result
+    def delete(self,table, textid=None, clustid=None, personid=None):
+        """
+        :param table: имя таблицы, откуда происходит удаление
+        :param textid: условия для поиска строк, которые необходимо удалить
+        :param clustid: условия для поиска строк, которые необходимо удалить
+        :param personid: условия для поиска строк, которые необходимо удалить
+        :return: запрос для удаления
+        """
+        query = 'DELETE FROM '+table+' WHERE '
+        if textid!=None:
+            query += self.__select_condition('textid',textid)
+        if personid!=None:
+            query += self.__select_condition('personid',personid)
+        if clustid!=None:
+            query += self.__select_condition('clustid',clustid)
+        query += '1=1;'
+        return query
 
-print data_retrieval()
+
 
