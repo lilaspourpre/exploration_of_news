@@ -19,7 +19,7 @@ class ArticleParser():
         self.dict_list=[]
         self.probable_names=[]
 
-    def useful_operations(self, text):
+    def pre_operations(self, text):
         for phrase in text:
             self.sentences_list.append(word_tokenize(phrase))    #создаем списки предложений
         self.sentences_list = [i for i in self.sentences_list if len(i) >= 2]
@@ -42,39 +42,41 @@ class ArticleParser():
         text = phrase2.sub('.', text)
         text = phrase3.sub('', text)
         text = text.split(".") #распарсили текст
-        self.useful_operations(text)
+        self.pre_operations(text)
         self.critere_parser()
         return self.probable_names
 
     def critere_parser(self):
-        for index in range(len(self.sentences_list)): #имеет смысл иметь зип заглавных всех, заглавных первых (так будет быстрее)
+        def estimator(cur_word, num_word):
+            prob_cur_word = 0
+            if cur_word != cur_word.upper() and cur_word == cur_word.capitalize():                         #если с заглавной +0.2
+                prob_cur_word+= 0.2
+                if len(cur_word) > 1:                                          #если длина >1  +0.2
+                    prob_cur_word+= 0.2
+                    if num_word==0: #если в начале предложения -0.2
+                        prob_cur_word -= 0.2
+                        for phraseW in self.sentences_list:
+                            if cur_word in phraseW and phraseW.index(cur_word)!=0:         #если с большой б в тексте не в начале - то прибавить
+                                prob_cur_word+= 0.3
+                    else:                                                           #если не в начале предложения +0.3
+                        prob_cur_word+= 0.3
+                        if cur_word.lower() in self.wordlist:                      #если есть в тексте с маленькой буквы -0.3
+                            prob_cur_word -= 0.3
+                    if cur_word in self.dict_names:
+                        prob_cur_word = 0.9                               # если есть в словаре
+                    if cur_word in self.surely_not_in:
+                        prob_cur_word = 0
+            return prob_cur_word
+        for index in range(len(self.sentences_list)):
             for word in self.dict_list[index]:
-                if word[0] != word[0].upper():
-                    if word[0] == word[0].capitalize():                         #если с заглавной +0.2
-                        self.dict_list[index][word]+= 0.2
-                        if len(word[0]) > 1:                                          #если длина >1  +0.2
-                            self.dict_list[index][word]+= 0.2
-                            if word[1]==0: #если в начале предложения -0.2
-                                self.dict_list[index][word] = self.dict_list[index][word] - 0.2
-                                for phraseW in self.sentences_list:
-                                    if word[0] in phraseW and phraseW.index(word[0])!=0:         #если с большой б в тексте не в начале - то прибавить
-                                        self.dict_list[index][word]+= 0.3
-                            else:                                                           #если не в начале предложения +0.3
-                                self.dict_list[index][word]+= 0.3
-                                if word[0].lower() in self.wordlist:                      #если есть в тексте с маленькой буквы -0.3
-                                    self.dict_list[index][word] = self.dict_list[index][word] - 0.3
-                            if word[0] in self.dict_names:
-                                self.dict_list[index][word] = 0.9                               # если есть в словаре
-                            if word[0] in self.surely_not_in:
-                                self.dict_list[index][word] = 0
+                self.dict_list[index][word] = estimator(word[0], word[1])
         for sentence in self.dict_list:
             for word in sentence:
                 if sentence.get(word) >= 0.7:
                     self.probable_names.append(word[0])
-                    if word[1] != 0:
-                        if sentence.get((self.sentences_list[self.dict_list.index(sentence)][word[1]-1],word[1]-1)) > 0.5:
+                    if word[1] != 0: #если слово не первое в предложении, можно перейти к след.условию
+                        if sentence.get((self.sentences_list[self.dict_list.index(sentence)][word[1]-1],word[1]-1)) > 0.5: #если предыдуще слово тоже личное имя, то мы их объединяем (имя + фамилия)
                             self.probable_names.append(self.sentences_list[self.dict_list.index(sentence)][word[1]-1]+" "+word[0])
-        return 0
 
     def cluster_recogniser(self, corpus):
         corpus_res = {}

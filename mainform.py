@@ -1,16 +1,22 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-'
+from matplotlib import rc
+rc('font',**{'family':'verdana'})
+try:
+    import matplotlib.pyplot as plt
+except:
+    raise
 from PyQt4 import QtCore, QtGui, uic
 import request_parser, psycopg2, datetime, networkx as nx, codecs,os.path
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt4agg import (
     FigureCanvasQTAgg as FigureCanvas,)
-import graph_builder as gb
 class MainForm(QtGui.QMainWindow):
     # конструктор
     def __init__(self, app):
         super(MainForm, self).__init__()
         # динамически загружает визуальное представление формы
         self.app = app # QtApplication для смены языка
+        self.lang = 'en'
         uic.loadUi("first.ui", self) #загружает UIfile QtDesigner, интерфейс программы
         self.setWindowTitle(self.app.translate('MainWindow','Query Window')) #заголовок главного окна
         self.lineEdit.setPlaceholderText(self.app.translate('MainWindow','Write your query here')) #текст незаполненной строки ввода
@@ -44,7 +50,7 @@ class MainForm(QtGui.QMainWindow):
         self.actionRussian.setChecked(False)
         self.actionEnglish.setChecked(True) #выбран английский язык, остальные не выбраны
         self.actionFrench.setChecked(False)
-        self.changeLang('e') #установление языка
+        self.changeLang('en') #установление языка
 
     def changeLangF(self):
         self.actionRussian.setChecked(False)
@@ -53,20 +59,23 @@ class MainForm(QtGui.QMainWindow):
         self.changeLang('translation/fr_translation.qm') #установление языка
 
     def changeLang(self, lang):
+        self.lang=lang
         try:
             self.app.removeTranslator(self.translator) #модель перевода удаляется
             self.app.removeTranslator(self.common_translator)
         except:
             pass
-        if lang != 'e': #если выбран не английский
+        if lang != 'en': #если выбран не английский
             self.translator = QtCore.QTranslator() #вызывается переводчик
             self.translator.load(lang) #загружается перевод
             self.app.installTranslator(self.translator) #переводчик устанавливается в приложение
 
             self.common_translator = QtCore.QTranslator() #вызывается переводчик
             if 'fr_' in lang:
+                self.lang='fr'
                 load = 'translation/qt_fr.qm' #загружается перевод
             elif 'ru_' in lang:
+                self.lang='ru'
                 load = 'translation/qt_ru.qm'
             self.common_translator.load(load) #загружается перевод
             self.app.installTranslator(self.common_translator) #переводчик устанавливается в приложение
@@ -102,19 +111,20 @@ class MainForm(QtGui.QMainWindow):
 
     def request(self, text):
         RP = request_parser.RequestParser() #вызов парсера для формирования SQL-запроса
-        RP.connect() #установка соединения
         try:
+            RP.connect() #установка соединения
             if 'upload' in text: #загружаем статью - открываем диалоговое окно загрузки
-                self.upload_parser(text.replace('upload ',''))
+                if ' ru' in text or ' en' in text:
+                    self.upload_parser(text.replace('upload ',''))
+                else:
+                    res_decoded, result = [['Verify the language']], [[],['Error']]
             else: #или передаем запрос для формирования SQL-запроса
                 result = RP.request_parser(text) #результат SQL-запроса в виде списков возвращается в переменную
                 if result[0] != []: #если ответ БД не пустой
-                    print 'yeah'
                     if len(result)==3: #если запрос был относительно связей для построения графа (дополнительный item = словарь для графа)
-                        print 'res', result[2]
                         self.pushButton4.setDisabled(False) #кнопка "Построить граф" становится активной
                         self.openGraphPrinter = GraphForm(self, req=text, clusttexts=result[2], app=self.app)  #формируем конструктор окна
-                        res_decoded = [(i[0],i[1].decode('utf-8'),i[2]) for i in result[0]] #decode для отображения русского текста
+                        res_decoded = [(i[0],i[1].decode('utf-8')) for i in result[0]] #decode для отображения русского текста
                     else:
                         try:
                             res_decoded = [(i[0],i[1].decode('utf-8')) for i in result[0]] #decode для отображения русского текста
@@ -137,9 +147,9 @@ class MainForm(QtGui.QMainWindow):
 
     def upload_parser(self,text):
         "запрос по загрузки статьи можно начать оформлять также при помощи запроса, окно откроется автоматически"
-        if 'en' in text: #запрос состоит из двух частей: название файла со статьей и язык
+        if ' en' in text: #запрос состоит из двух частей: название файла со статьей и язык
             self.text = [text.replace(' en',''),'en']
-        elif 'ru' in text: #формируем text=[name, lang]
+        elif ' ru' in text: #формируем text=[name, lang]
             self.text = [text.replace(' ru',''),'ru']
         self.openDialog() #открывается диалоговая форма
     def openDialog(self):
@@ -148,7 +158,7 @@ class MainForm(QtGui.QMainWindow):
     def openGraph(self):
         self.openGraphPrinter.show() #функция ужке вызвана в _init_, здесь происходит только открытие окна
     def openHelp(self):
-        self.openHelpWindow = HelpForm(self, app=self.app) #вызов конструктора диалогового окна по построению графа
+        self.openHelpWindow = HelpForm(self, app=self.app, lan=self.lang) #вызов конструктора диалогового окна по построению графа
         self.openHelpWindow.show() #функция ужке вызвана в _init_, здесь происходит только открытие окна
 
 class MyTableModel(QtCore.QAbstractTableModel):
@@ -205,37 +215,40 @@ class DialogForm(QtGui.QDialog):
             date = str(self.lineEdit3.text()).split('-') #дата
             date = datetime.date(int(date[2]),int(date[1]),int(date[0])) #перевод в формат даты Python, необходимый для psycopg2
             language = str(self.lineEdit5.text()) #язык
-        except:
-            pass
-        try:
-            UP = request_parser.UploadParser() #вызов парсера для формирования SQL-запроса
-            UP.connect() #установка соединения
-            self.names = UP.return_IEnames([textname,source, date,language]) #загрузка статьи
-            if self.checkBox.isChecked() == True: #если выбран ручной анализ
-                self.openUpload('\n'.join(self.names)) #обработать имена в окне
-                self.names = self.openNewForm.newText #сохранить новые имена
-            self.clusters = UP.return_clusters(self.names) #получить кластеры
-            if self.checkBox.isChecked() == True: #если выбран ручной анализ
-                self.openUpload(self.clusters) #обработать кластеры в окне
-                self.clust_parser(self.openNewForm.newText) #сохранить новые кластеры
-            self.copies = UP.verify_clusters(self.clusters) #проверка кластеров, существуют ли они уже в списке кластеров
-            if self.copies!=[]: #если совпадения-таки обнаружены
-                copy=''
-                for name in self.copies: #добавляем имена в строку
-                    for var in name:
-                        for val in var:
-                            copy+=str(val)+', '
-                        copy+='\n'
-                self.openUpload(copy.replace(', \n','\n'))
-                copies = self.clust_replacement(self.openNewForm.newText) #обработать имеющиеся кластеры
-            self.answer = UP.return_result(self.clusters, copies) #вернуть кластеры для записи, а также копии, которые необходимо использовать
-            try: #закрытие соединения
-                UP.close()
-            except psycopg2.DatabaseError, e:
-                print e
-        except:
+            if language!='en' and language!='ru':
+                raise Exception()
+            try:
+                UP = request_parser.UploadParser() #вызов парсера для формирования SQL-запроса
+                UP.connect() #установка соединения
+                self.names = UP.return_IEnames([textname,source, date,language]) #загрузка статьи
+                if self.checkBox.isChecked() == True: #если выбран ручной анализ
+                    self.openUpload('\n'.join(self.names)) #обработать имена в окне
+                    self.names = self.openNewForm.newText #сохранить новые имена
+                self.clusters = UP.return_clusters(self.names) #получить кластеры
+                if self.checkBox.isChecked() == True: #если выбран ручной анализ
+                    self.openUpload(self.clusters) #обработать кластеры в окне
+                    self.clust_parser(self.openNewForm.newText) #сохранить новые кластеры
+                self.copies = UP.verify_clusters(self.clusters) #проверка кластеров, существуют ли они уже в списке кластеров
+                if self.copies!=[]: #если совпадения-таки обнаружены
+                    copy=''
+                    for name in self.copies: #добавляем имена в строку
+                        for var in name:
+                            for val in var:
+                                copy+=str(val)+', '
+                            copy+='\n'
+                    self.openUpload(copy.replace(', \n','\n'))
+                    copies = self.clust_replacement(self.openNewForm.newText) #обработать имеющиеся кластеры
+                self.answer = UP.return_result(self.clusters, copies) #вернуть кластеры для записи, а также копии, которые необходимо использовать
+                try: #закрытие соединения
+                    UP.close()
+                except psycopg2.DatabaseError, e:
+                    print e
+            except:
+                self.answer = u'en: Error while loading\nru: Ошибка загрузки\nErreur de chargement'
+            finally:
+                self.openAnswer(self.answer)
+        except Exception:
             self.answer = u'en: Error while loading\nru: Ошибка загрузки\nErreur de chargement'
-        finally:
             self.openAnswer(self.answer)
 
     def openUpload(self, text):
@@ -264,8 +277,6 @@ class DialogForm(QtGui.QDialog):
         for i in clust_list:
             if i != u'':
                 splitter = i.split(' :: ')
-                print splitter
-                print splitter[1].split(', ')
                 self.clusters[splitter[0]] = splitter[1].split(', ')
 
     def clust_replacement(self, clust_list):
@@ -360,11 +371,9 @@ class GraphForm(QtGui.QDialog):
 
     def saveGraph(self):
         """
-        вызвать новое построение графа
         :return: изобрание в папке Graphs
         """
-        graph = gb.Graphs(self.req) #вызвать класс Graphs
-        graph.build_graph(self.clusttexts) #построить граф на основе кластеров
+        self.sc.build_graph()
 
     def saveAll(self):
         """
@@ -382,13 +391,14 @@ class HelpForm(QtGui.QDialog):
     """
     конструктор окна помощи
     """
-    def __init__(self, parent = None,app=None):
+    def __init__(self, parent = None,app=None, lan='en'):
         super(HelpForm, self).__init__(parent)
         self.app = app #QApplication для смены язык
         # динамически загружает визуальное представление формы
         uic.loadUi("help.ui", self)
         self.setWindowTitle(self.app.translate('Help','Help Window')) #установка заголовка окна
-        self.textBrowser.setText(self.app.translate('Help','Hello world!\nHey you!')) #здесь располагается текст справки
+        text_help = codecs.open('manual_'+lan+'.html','r', 'utf-8').read()
+        self.textBrowser.setText(text_help) #здесь располагается текст справки
 
 class MyMplCanvas(FigureCanvas):
     """Основа для отображения графа"""
@@ -414,7 +424,7 @@ class MyStaticMplCanvas(MyMplCanvas):
     """Simple canvas with a sine plot."""
     def compute_initial_figure(self):
         G=nx.Graph() #вызов графа
-        dic = gb.buildEdges(self.clusttexts) #преобразование в форму [text, [name1,name2,name3]]
+        dic = self.buildEdges(self.clusttexts) #преобразование в форму [text, [name1,name2,name3]]
         for i in dic: #для каждого текста
             for j in i[1]: #для каждого героя в тексте
                 for k in i[1]: #с каждым героем в тексте
@@ -433,6 +443,21 @@ class MyStaticMplCanvas(MyMplCanvas):
         self.G = G
         nx.draw(G,node_size=self.bc, node_color=self.cc, alpha=0.5,font_family='verdana', ax=self.axes)
 
+    def buildEdges(self, clusttexts):
+        """
+        :param clusttexts: словарь, героев и список их текстов
+        :return: список текстов и героев в каждом из них
+        """
+        texts = list(set([el for lst in clusttexts.values() for el in lst])) #создаем список текстов
+        allTexts = [] #пустой список для хранения в формате [text, [pers1,pers2,pers3]]
+        for text in texts:
+            l = [] #список персонажей
+            for cluster in clusttexts: #для каждого персонажа
+                if text in clusttexts.get(cluster): #если он упоминается в тексте
+                    l.append(cluster.decode('utf-8')) #персонаж вносится в список
+            allTexts.append([text,l]) #сохранение в формате [text, [pers1,pers2,pers3]]
+        return allTexts
+
     def graph_parameters(self):
         """
         :return: текст с парамтерами графа
@@ -448,6 +473,10 @@ class MyStaticMplCanvas(MyMplCanvas):
         text+="degree = "+str(self.degree)+'\n'
         text+="density = "+str(self.density)
         return text
+
+    def build_graph(self):
+        nx.draw(self.G,node_size=self.bc, node_color=self.cc, alpha=0.5, font_family='verdana') #построение графа
+        plt.savefig('Graphs/'+self.req+'.png') #сохранение графа в папку Graphs
 
     def saveText(self):
         """
