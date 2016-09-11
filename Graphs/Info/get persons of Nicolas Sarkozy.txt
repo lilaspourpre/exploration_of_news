@@ -1,0 +1,7 @@
+query: get persons of Nicolas Sarkozy
+betweenness centrality = [250.0, 250.0, 250.0, 250.0, 250.0]
+closeness centrality = [1.0, 1.0, 1.0, 1.0, 1.0]
+diameter = 1
+average clustering = 1.0
+degree = {u'Donald Trump': 6, u'Hollande': 6, u'Khan': 6, u'Nicolas Sarkozy': 6, u'Obama': 6}
+density = 1.5

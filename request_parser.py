@@ -81,13 +81,15 @@ class RequestParser(dse.SQL_query):
                     requete)  # удаление начинается с таблицы ptrelations, т.к. политика restrict
                 self.drop_article(text_pers_ids[0])  # затем удаляется статья
                 clustids = self.drop_persons(text_pers_ids[1])  # удаляются персонажи и функция возвращает кластеры
-                self.drop_clusters(clustids)  # в последнюю очередь удаляются кластеры
+                try:
+                    self.drop_clusters(clustids)  # в последнюю очередь удаляются кластеры
+                except:
+                    pass
                 return [[['dropped']], [requete]]  # вернуть сообщение о том, что удаление прошло успешно
             except:
                 return [[['Verify the name of article']], ['Error']]  # вернуть сообщение об ошибке
         else:
             return [[['Verify syntax']], ['Error']]  # вернуть сообщение об ошибке
-        return 0
 
     def drop_ptrelations(self, textname):
         query = self.texts(textname=[textname])
@@ -152,6 +154,6 @@ class UploadParser(dse.SQL_query):
             else:
                 cluster_id = copies[alias]
             for name in clusters.get(alias):
-                person_id = self.insert('persons', column_names=['persname', 'clustid'], values=[name, cluster_id])
+                person_id = self.insert('persons', column_names=['persname', 'clustid'], values=[name.encode('utf-8'), cluster_id])
                 self.insert('ptrelations', column_names=['personid', 'textid'], values=[person_id, self.text_index])
         return u"en: done successfully\nru: успешно загружено\nfr: succes de chargement"

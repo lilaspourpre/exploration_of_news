@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-'
 from matplotlib import rc
 rc('font',**{'family':'verdana'})
-try:
-    import matplotlib.pyplot as plt
-except:
-    raise
 from PyQt4 import QtCore, QtGui, uic
-import request_parser, psycopg2, datetime, networkx as nx, codecs,os.path
+import request_parser, psycopg2, datetime, networkx as nx, codecs,os.path, matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt4agg import (
     FigureCanvasQTAgg as FigureCanvas,)
@@ -44,19 +40,19 @@ class MainForm(QtGui.QMainWindow):
         self.actionRussian.setChecked(True) #выбран русский язык, остальные не выбраны
         self.actionEnglish.setChecked(False)
         self.actionFrench.setChecked(False)
-        self.changeLang('translation/ru_translation.qm') #установление языка
+        self.changeLang('translation/ru_translation.qm') #установка языка
 
     def changeLangE(self):
         self.actionRussian.setChecked(False)
         self.actionEnglish.setChecked(True) #выбран английский язык, остальные не выбраны
         self.actionFrench.setChecked(False)
-        self.changeLang('en') #установление языка
+        self.changeLang('en') #установка языка
 
     def changeLangF(self):
         self.actionRussian.setChecked(False)
         self.actionEnglish.setChecked(False)
         self.actionFrench.setChecked(True) #выбран французский язык, остальные не выбраны
-        self.changeLang('translation/fr_translation.qm') #установление языка
+        self.changeLang('translation/fr_translation.qm') #установка языка
 
     def changeLang(self, lang):
         self.lang=lang
@@ -116,6 +112,7 @@ class MainForm(QtGui.QMainWindow):
             if 'upload' in text: #загружаем статью - открываем диалоговое окно загрузки
                 if ' ru' in text or ' en' in text:
                     self.upload_parser(text.replace('upload ',''))
+                    res_decoded, result = [['']], [[],['']]
                 else:
                     res_decoded, result = [['Verify the language']], [[],['Error']]
             else: #или передаем запрос для формирования SQL-запроса
@@ -236,18 +233,18 @@ class DialogForm(QtGui.QDialog):
                             for val in var:
                                 copy+=str(val)+', '
                             copy+='\n'
-                    self.openUpload(copy.replace(', \n','\n'))
+                    self.openUpload(copy.replace(', \n','\n').decode('utf-8'))
                     copies = self.clust_replacement(self.openNewForm.newText) #обработать имеющиеся кластеры
                 self.answer = UP.return_result(self.clusters, copies) #вернуть кластеры для записи, а также копии, которые необходимо использовать
                 try: #закрытие соединения
                     UP.close()
                 except psycopg2.DatabaseError, e:
-                    print e
-            except:
+                    pass
+            except Exception, e:
                 self.answer = u'en: Error while loading\nru: Ошибка загрузки\nErreur de chargement'
             finally:
                 self.openAnswer(self.answer)
-        except Exception:
+        except Exception, e:
             self.answer = u'en: Error while loading\nru: Ошибка загрузки\nErreur de chargement'
             self.openAnswer(self.answer)
 
@@ -284,7 +281,8 @@ class DialogForm(QtGui.QDialog):
         создает словарь кластеров для замены
         """
         dic_copies = {}
-        del clust_list[len(clust_list)-1] #удаляем u''
+        if clust_list[len(clust_list)-1]==u'':
+            del clust_list[len(clust_list)-1] #удаляем u''
         for clust in clust_list:
             a = clust.split(', ') # делим по ', '
             dic_copies[a[1]] = int(a[0]) #добавляем в словарь кластер : id

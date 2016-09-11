@@ -11,6 +11,7 @@ class SQL_query():
     def __init__(self):
         self.con = None
         self.cur = None
+        self.DB_RECONNECT_DELAY_SEC = 1
 
     def open_config(self, config): #находит в файле xml код и строит дерево, возвращает строку для коннекта
         tree = ET.parse(config)
@@ -37,7 +38,7 @@ class SQL_query():
             self.connect()
             if not self.con:
             # wait for a second
-                time.sleep(1)
+                time.sleep(self.DB_RECONNECT_DELAY_SEC)
 
     def __select_condition(self, columnname, data):
         """
